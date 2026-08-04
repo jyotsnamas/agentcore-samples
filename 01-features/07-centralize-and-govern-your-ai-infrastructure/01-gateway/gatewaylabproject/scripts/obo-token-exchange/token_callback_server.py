@@ -163,10 +163,18 @@ class TokenCallbackServer:
                 )
 
             _captured_token = tokens.get("access_token", "")
+            # Print a prefix only. The full bearer token stays in memory for the
+            # notebook to read; echoing it to the terminal would persist a live
+            # credential in scrollback, shell logs and screen shares.
             print(f"\n{'=' * 60}")
             print("TOKEN RECEIVED")
             print(f"{'=' * 60}")
-            print(f"\nFULL ACCESS TOKEN:\n{_captured_token}")
+            print(f"\nAccess token: {_captured_token[:20]}... ({len(_captured_token)} chars)")
+            print(
+                f"\nRetrieve the full token from http://localhost:{PORT}{TOKEN_ENDPOINT}, e.g.\n"
+                f'  export BEARER_TOKEN=$(curl -sS http://localhost:{PORT}{TOKEN_ENDPOINT} \\\n'
+                f'    | python3 -c "import sys, json; print(json.load(sys.stdin)[\'access_token\'])")'
+            )
             print(f"\n{'=' * 60}")
             return HTMLResponse(
                 "<h2>✅ Token captured! Return to the notebook.</h2>", status_code=200

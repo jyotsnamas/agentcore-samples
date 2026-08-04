@@ -189,7 +189,7 @@ Sign in when the browser opens, then read the captured token:
 export BEARER_TOKEN=$(curl -sS http://localhost:9090/token \
   | python3 -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
 
-echo "Bearer token: $BEARER_TOKEN"
+echo "Bearer token captured: ${BEARER_TOKEN:0:20}... (${#BEARER_TOKEN} chars)"
 ```
 
 #### Connect the inspector

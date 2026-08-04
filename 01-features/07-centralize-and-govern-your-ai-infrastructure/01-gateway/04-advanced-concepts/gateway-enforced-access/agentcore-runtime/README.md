@@ -87,7 +87,8 @@ uv run scripts/obo-token-exchange/token_callback_server.py \
 Sign in when the browser opens, then capture the runtime-audience token:
 
 ```bash
-export RUNTIME_TOKEN="<Token>"
+export RUNTIME_TOKEN=$(curl -sS http://localhost:9090/token \
+  | python3 -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
 ```
 
 Call the runtime invocation URL directly with it:

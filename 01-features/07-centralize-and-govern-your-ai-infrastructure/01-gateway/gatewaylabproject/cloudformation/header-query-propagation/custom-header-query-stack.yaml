@@ -95,6 +95,11 @@ Resources:
       FunctionName: !Ref InterceptorFunction
       Action: lambda:InvokeFunction
       Principal: bedrock-agentcore.amazonaws.com
+      # Confused-deputy guard: without SourceAccount/SourceArn, ANY AWS account's
+      # AgentCore gateway could invoke this function. The gateway does not exist yet
+      # at template-deploy time, so scope to this account's gateways in this region.
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:gateway/*
 
   ToolFunction:
     Type: AWS::Lambda::Function
@@ -139,6 +144,11 @@ Resources:
       FunctionName: !Ref ToolFunction
       Action: lambda:InvokeFunction
       Principal: bedrock-agentcore.amazonaws.com
+      # Confused-deputy guard: without SourceAccount/SourceArn, ANY AWS account's
+      # AgentCore gateway could invoke this function. The gateway does not exist yet
+      # at template-deploy time, so scope to this account's gateways in this region.
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:gateway/*
 
 Outputs:
   InterceptorFunctionArn:

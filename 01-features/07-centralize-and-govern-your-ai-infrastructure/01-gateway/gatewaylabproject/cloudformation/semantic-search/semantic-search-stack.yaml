@@ -68,6 +68,11 @@ Resources:
       FunctionName: !Ref CalcFunction
       Action: lambda:InvokeFunction
       Principal: bedrock-agentcore.amazonaws.com
+      # Confused-deputy guard: without SourceAccount/SourceArn, ANY AWS account's
+      # AgentCore gateway could invoke this function. The gateway does not exist yet
+      # at template-deploy time, so scope to this account's gateways in this region.
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:gateway/*
 
   RestaurantFunction:
     Type: AWS::Lambda::Function
@@ -87,6 +92,11 @@ Resources:
       FunctionName: !Ref RestaurantFunction
       Action: lambda:InvokeFunction
       Principal: bedrock-agentcore.amazonaws.com
+      # Confused-deputy guard: without SourceAccount/SourceArn, ANY AWS account's
+      # AgentCore gateway could invoke this function. The gateway does not exist yet
+      # at template-deploy time, so scope to this account's gateways in this region.
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:gateway/*
 
 Outputs:
   CalcFunctionArn:

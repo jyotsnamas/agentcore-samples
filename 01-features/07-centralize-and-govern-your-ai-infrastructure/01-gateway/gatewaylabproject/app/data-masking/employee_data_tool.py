@@ -20,7 +20,12 @@ def lambda_handler(event, context):
 
     Returns mock employee data including PII (email, address).
     """
-    print(f"Employee data tool received event: {json.dumps(event)}")
+    # Log only the shape of the event: this tool sits behind a PII-masking
+    # interceptor, so its logs must not become a second copy of the payload.
+    print(
+        f"Employee data tool received event with keys: "
+        f"{sorted(event.keys()) if isinstance(event, dict) else type(event).__name__}"
+    )
 
     # Parse input
     body = event if isinstance(event, dict) else json.loads(event)

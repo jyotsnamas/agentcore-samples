@@ -18,6 +18,29 @@ bedrock_runtime = boto3.client("bedrock-runtime")
 GUARDRAIL_ID = os.environ.get("GUARDRAIL_ID")
 GUARDRAIL_VERSION = os.environ.get("GUARDRAIL_VERSION", "DRAFT")
 
+# Payload logging is OFF by default: this interceptor handles the very PII it is
+# masking, so echoing request/response bodies to CloudWatch would defeat the
+# control (log readers would see the unmasked values). Set
+# DEBUG_LOG_PAYLOADS=true only in a throwaway account when debugging.
+DEBUG_LOG_PAYLOADS = os.environ.get("DEBUG_LOG_PAYLOADS", "false").lower() == "true"
+
+
+def _log_payload(label: str, payload: Any) -> None:
+    """Log a payload only when explicitly opted in; otherwise log its size only."""
+    if DEBUG_LOG_PAYLOADS:
+        print(f"[DEBUG] {label}: {json.dumps(payload, default=str)}")
+    else:
+        size = len(json.dumps(payload, default=str)) if payload is not None else 0
+        print(f"[DEBUG] {label}: <redacted {type(payload).__name__}, {size} bytes>")
+
+
+def _log_text(label: str, text: str) -> None:
+    """Log free text only when explicitly opted in; otherwise log its length only."""
+    if DEBUG_LOG_PAYLOADS:
+        print(f"[DEBUG] {label}: {text[:300]}")
+    else:
+        print(f"[DEBUG] {label}: <redacted, {len(text)} chars>")
+
 
 def mask_pii_with_guardrails(text: str) -> str:
     """
@@ -29,9 +52,7 @@ def mask_pii_with_guardrails(text: str) -> str:
     Returns:
         Text with PII masked/anonymized by Guardrails
     """
-    print(
-        f"[DEBUG] mask_pii_with_guardrails - INPUT text (first 200 chars): {text[:200]}"
-    )
+    _log_text("mask_pii_with_guardrails - INPUT text", text)
 
     if not GUARDRAIL_ID:
         print("[DEBUG] WARNING: GUARDRAIL_ID not configured, skipping PII masking")
@@ -54,17 +75,13 @@ def mask_pii_with_guardrails(text: str) -> str:
             content=[{"text": {"text": text}}],
         )
 
-        print(
-            f"[DEBUG] Guardrails API response received: {json.dumps(response, default=str)}"
-        )
+        _log_payload("Guardrails API response received", response)
 
         # Extract the masked text from the response
         outputs = response.get("outputs", [])
         if outputs and len(outputs) > 0:
             masked_text = outputs[0].get("text", text)
-            print(
-                f"[DEBUG] Extracted masked_text (first 200 chars): {masked_text[:200]}"
-            )
+            _log_text("Extracted masked_text", masked_text)
 
             # Log PII detection details
             usage = response.get("usage", {})
@@ -128,9 +145,7 @@ def mask_tool_response(response_body: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Response body with masked PII in the text field
     """
-    print(
-        f"[DEBUG] mask_tool_response - INPUT response_body: {json.dumps(response_body, default=str)}"
-    )
+    _log_payload("mask_tool_response - INPUT response_body", response_body)
 
     # Create a deep copy to avoid modifying the original
     masked_response = json.loads(json.dumps(response_body))
@@ -163,21 +178,17 @@ def mask_tool_response(response_body: Dict[str, Any]) -> Dict[str, Any]:
             print(f"[DEBUG] Content item {i} has empty text, skipping")
             continue
 
-        print(f"[DEBUG] Content item {i} text (first 200 chars): {text_value[:200]}")
+        _log_text(f"Content item {i} text", text_value)
 
         try:
             # Try to parse the text as JSON
             parsed_json = json.loads(text_value)
             print("[DEBUG] Successfully parsed text as JSON")
-            print(
-                f"[DEBUG] Parsed JSON structure: {json.dumps(parsed_json, default=str)[:300]}"
-            )
+            _log_payload("Parsed JSON structure", parsed_json)
 
             # Convert the parsed JSON to a pretty string for Guardrails processing
             json_string = json.dumps(parsed_json, indent=2)
-            print(
-                f"[DEBUG] Converted to JSON string for Guardrails (first 300 chars): {json_string[:300]}"
-            )
+            _log_text("Converted to JSON string for Guardrails", json_string)
 
             # Apply Bedrock Guardrails to anonymize the JSON content
             print("[DEBUG] Applying Bedrock Guardrails to anonymize JSON content...")
@@ -190,9 +201,7 @@ def mask_tool_response(response_body: Dict[str, Any]) -> Dict[str, Any]:
             try:
                 anonymized_json = json.loads(anonymized_json_string)
                 print("[DEBUG] Successfully parsed anonymized string back to JSON")
-                print(
-                    f"[DEBUG] Anonymized JSON object: {json.dumps(anonymized_json, default=str)[:300]}"
-                )
+                _log_payload("Anonymized JSON object", anonymized_json)
 
                 # Replace with the JSON object directly (not as a string)
                 masked_response["result"]["content"][i]["text"] = anonymized_json
@@ -212,7 +221,7 @@ def mask_tool_response(response_body: Dict[str, Any]) -> Dict[str, Any]:
             # Apply Bedrock Guardrails to anonymize the text
             print("[DEBUG] Applying Bedrock Guardrails to anonymize plain text...")
             anonymized_text = mask_pii_with_guardrails(text_value)
-            print(f"[DEBUG] Anonymized text (first 200 chars): {anonymized_text[:200]}")
+            _log_text("Anonymized text", anonymized_text)
 
             # Replace the text back in the response
             masked_response["result"]["content"][i]["text"] = anonymized_text
@@ -256,38 +265,33 @@ def lambda_handler(event, context):
     Returns transformed response with masked PII for any tool.
     """
     print("[DEBUG] ========== LAMBDA HANDLER START ==========")
-    print(
-        f"[DEBUG] PII Masking Interceptor - Received event: {json.dumps(event, default=str)}"
-    )
+    _log_payload("PII Masking Interceptor - Received event", event)
 
     try:
         # Extract MCP data
         mcp_data = event.get("mcp", {})
-        print(f"[DEBUG] Extracted mcp_data: {json.dumps(mcp_data, default=str)}")
+        _log_payload("Extracted mcp_data", mcp_data)
 
         gateway_response = mcp_data.get("gatewayResponse", {})
-        print(
-            f"[DEBUG] Extracted gateway_response: {json.dumps(gateway_response, default=str)}"
-        )
+        _log_payload("Extracted gateway_response", gateway_response)
 
         gateway_request = mcp_data.get("gatewayRequest", {})
-        print(
-            f"[DEBUG] Extracted gateway_request: {json.dumps(gateway_request, default=str)}"
-        )
+        _log_payload("Extracted gateway_request", gateway_request)
 
         # Get response data
         response_headers = gateway_response.get("headers", {})
-        print(f"[DEBUG] response_headers: {response_headers}")
+        # Log header names only — header values can carry bearer tokens.
+        print(f"[DEBUG] response_headers (names only): {sorted(response_headers)}")
 
         response_body = gateway_response.get("body", {})
-        print(f"[DEBUG] response_body: {json.dumps(response_body, default=str)}")
+        _log_payload("response_body", response_body)
 
         status_code = gateway_response.get("statusCode", 200)
         print(f"[DEBUG] status_code: {status_code}")
 
         # Get request data to check which tool was called
         request_body = gateway_request.get("body", {})
-        print(f"[DEBUG] request_body: {json.dumps(request_body, default=str)}")
+        _log_payload("request_body", request_body)
 
         method = request_body.get("method", "")
         print(f"[DEBUG] Method: {method}")
@@ -303,9 +307,7 @@ def lambda_handler(event, context):
             # Mask PII in the response for any tool
             masked_body = mask_tool_response(response_body)
 
-            print(
-                f"[DEBUG] Masked response body: {json.dumps(masked_body, default=str)}"
-            )
+            _log_payload("Masked response body", masked_body)
 
             # Build return object
             return_obj = {
@@ -319,9 +321,7 @@ def lambda_handler(event, context):
                 },
             }
 
-            print(
-                f"[DEBUG] lambda_handler - RETURNING (tools/call): {json.dumps(return_obj, default=str)}"
-            )
+            _log_payload("lambda_handler - RETURNING (tools/call)", return_obj)
             print("[DEBUG] ========== LAMBDA HANDLER END (tools/call) ==========")
             return return_obj
 
@@ -339,9 +339,7 @@ def lambda_handler(event, context):
             },
         }
 
-        print(
-            f"[DEBUG] lambda_handler - RETURNING (passthrough): {json.dumps(passthrough_obj, default=str)}"
-        )
+        _log_payload("lambda_handler - RETURNING (passthrough)", passthrough_obj)
         print("[DEBUG] ========== LAMBDA HANDLER END (passthrough) ==========")
         return passthrough_obj
 
@@ -364,8 +362,6 @@ def lambda_handler(event, context):
             },
         }
 
-        print(
-            f"[DEBUG] lambda_handler - RETURNING (error): {json.dumps(error_obj, default=str)}"
-        )
+        _log_payload("lambda_handler - RETURNING (error)", error_obj)
         print("[DEBUG] ========== LAMBDA HANDLER END (error) ==========")
         return error_obj

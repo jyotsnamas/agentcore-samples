@@ -139,7 +139,8 @@ uv run scripts/obo-token-exchange/token_callback_server.py \
 Sign in when the browser opens, then read the captured token and invoke the runtime with it:
 
 ```bash
-export RUNTIME_TOKEN="<Put Bearer Token>"
+export RUNTIME_TOKEN=$(curl -sS http://localhost:9090/token \
+  | python3 -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
 
 agentcore invoke --runtime aws_docs_http \
   --bearer-token "$RUNTIME_TOKEN" \
@@ -257,9 +258,10 @@ Next, acquire the **gateway-audience** token used for the gateway demo below. Th
 uv run scripts/obo-token-exchange/token_callback_server.py \
   $MICROSOFT_TENANT_ID $MICROSOFT_GATEWAY_CLIENT_ID $MICROSOFT_GATEWAY_CLIENT_SECRET
 
-export BEARER_TOKEN="<Put Bearer Token>"
+export BEARER_TOKEN=$(curl -sS http://localhost:9090/token \
+  | python3 -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
 
-echo "Bearer token: $BEARER_TOKEN"
+echo "Bearer token captured: ${BEARER_TOKEN:0:20}... (${#BEARER_TOKEN} chars)"
 ```
 
 Call the agent through the gateway with your **Entra ID user token** from Step 4. The gateway validates it, OBO exchanges it for a runtime scoped token, and forwards the request. HTTP targets use path based routing of the form `{GATEWAY_URL}/{targetName}/invocations`.
