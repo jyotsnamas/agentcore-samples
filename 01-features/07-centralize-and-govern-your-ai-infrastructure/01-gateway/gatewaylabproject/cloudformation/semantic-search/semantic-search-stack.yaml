@@ -52,6 +52,7 @@ Resources:
 
   CalcFunction:
     Type: AWS::Lambda::Function
+    DependsOn: CalcFunctionLogGroup
     Properties:
       FunctionName: calc_lambda_gateway
       Runtime: python3.12
@@ -71,6 +72,7 @@ Resources:
 
   RestaurantFunction:
     Type: AWS::Lambda::Function
+    DependsOn: RestaurantFunctionLogGroup
     Properties:
       FunctionName: restaurant_lambda_gateway
       Runtime: python3.12
@@ -87,6 +89,24 @@ Resources:
       FunctionName: !Ref RestaurantFunction
       Action: lambda:InvokeFunction
       Principal: bedrock-agentcore.amazonaws.com
+
+  CalcFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      # Declared explicitly so retention is bounded. Left implicit, Lambda
+      # auto-creates this group with retention "Never expire", so tutorial logs
+      # accumulate and keep being billed long after the stack is deleted.
+      LogGroupName: /aws/lambda/calc_lambda_gateway
+      RetentionInDays: 30
+
+  RestaurantFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      # Declared explicitly so retention is bounded. Left implicit, Lambda
+      # auto-creates this group with retention "Never expire", so tutorial logs
+      # accumulate and keep being billed long after the stack is deleted.
+      LogGroupName: /aws/lambda/restaurant_lambda_gateway
+      RetentionInDays: 30
 
 Outputs:
   CalcFunctionArn:

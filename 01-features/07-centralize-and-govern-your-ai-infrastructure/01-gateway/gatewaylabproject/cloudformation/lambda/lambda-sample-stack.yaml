@@ -36,6 +36,7 @@ Resources:
 
   LambdaFunction:
     Type: AWS::Lambda::Function
+    DependsOn: LambdaFunctionLogGroup
     Properties:
       FunctionName: agentcore-gateway-lambda-sample
       Runtime: python3.12
@@ -54,6 +55,15 @@ Resources:
                   return {'statusCode': 200, 'body': 'Order Id 123 is in shipped status'}
               else:
                   return {'statusCode': 200, 'body': 'Updated the order details successfully'}
+
+  LambdaFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      # Declared explicitly so retention is bounded. Left implicit, Lambda
+      # auto-creates this group with retention "Never expire", so tutorial logs
+      # accumulate and keep being billed long after the stack is deleted.
+      LogGroupName: /aws/lambda/agentcore-gateway-lambda-sample
+      RetentionInDays: 30
 
 Outputs:
   LambdaFunctionArn:

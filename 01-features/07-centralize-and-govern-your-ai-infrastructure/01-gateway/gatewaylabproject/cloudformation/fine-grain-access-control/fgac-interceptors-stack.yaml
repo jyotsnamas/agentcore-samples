@@ -44,6 +44,7 @@ Resources:
 
   RequestInterceptorFunction:
     Type: AWS::Lambda::Function
+    DependsOn: RequestInterceptorFunctionLogGroup
     Properties:
       FunctionName: agentcore-fgac-request-interceptor
       Runtime: python3.12
@@ -147,6 +148,7 @@ Resources:
 
   ResponseInterceptorFunction:
     Type: AWS::Lambda::Function
+    DependsOn: ResponseInterceptorFunctionLogGroup
     Properties:
       FunctionName: agentcore-fgac-response-interceptor
       Runtime: python3.12
@@ -240,6 +242,24 @@ Resources:
       FunctionName: !Ref ResponseInterceptorFunction
       Action: lambda:InvokeFunction
       Principal: bedrock-agentcore.amazonaws.com
+
+  RequestInterceptorFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      # Declared explicitly so retention is bounded. Left implicit, Lambda
+      # auto-creates this group with retention "Never expire", so tutorial logs
+      # accumulate and keep being billed long after the stack is deleted.
+      LogGroupName: /aws/lambda/agentcore-fgac-request-interceptor
+      RetentionInDays: 30
+
+  ResponseInterceptorFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      # Declared explicitly so retention is bounded. Left implicit, Lambda
+      # auto-creates this group with retention "Never expire", so tutorial logs
+      # accumulate and keep being billed long after the stack is deleted.
+      LogGroupName: /aws/lambda/agentcore-fgac-response-interceptor
+      RetentionInDays: 30
 
 Outputs:
   RequestInterceptorArn:

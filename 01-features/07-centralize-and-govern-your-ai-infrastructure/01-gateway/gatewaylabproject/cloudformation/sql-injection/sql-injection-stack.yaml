@@ -52,6 +52,7 @@ Resources:
 
   InterceptorFunction:
     Type: AWS::Lambda::Function
+    DependsOn: InterceptorFunctionLogGroup
     Properties:
       FunctionName: agentcore-sql-injection-interceptor
       Runtime: python3.12
@@ -207,6 +208,7 @@ Resources:
 
   ToolFunction:
     Type: AWS::Lambda::Function
+    DependsOn: ToolFunctionLogGroup
     Properties:
       FunctionName: agentcore-sql-customer-query-tool
       Runtime: python3.12
@@ -261,6 +263,24 @@ Resources:
       FunctionName: !Ref ToolFunction
       Action: lambda:InvokeFunction
       Principal: bedrock-agentcore.amazonaws.com
+
+  InterceptorFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      # Declared explicitly so retention is bounded. Left implicit, Lambda
+      # auto-creates this group with retention "Never expire", so tutorial logs
+      # accumulate and keep being billed long after the stack is deleted.
+      LogGroupName: /aws/lambda/agentcore-sql-injection-interceptor
+      RetentionInDays: 30
+
+  ToolFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      # Declared explicitly so retention is bounded. Left implicit, Lambda
+      # auto-creates this group with retention "Never expire", so tutorial logs
+      # accumulate and keep being billed long after the stack is deleted.
+      LogGroupName: /aws/lambda/agentcore-sql-customer-query-tool
+      RetentionInDays: 30
 
 Outputs:
   InterceptorFunctionArn:
