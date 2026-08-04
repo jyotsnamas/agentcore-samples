@@ -59,6 +59,8 @@ lib/
 !06-workshops/01-AgentCore-runtime/01-hosting-agent/05-java-agents/02-embabel-with-bedrock-model/infra/lib/
 !02-use-cases/lakehouse-agent/deployment/advanced-agentcore-policy-gateway-interceptor/lib/
 !02-use-cases/02-workflow-automation-agents/event-driven-claims-agent/agentcore/cdk/lib/
+!01-features/07-centralize-and-govern-your-ai-infrastructure/01-gateway/gatewaylabproject/agentcore/cdk/lib/
+!01-features/07-centralize-and-govern-your-ai-infrastructure/01-gateway/03-private-connectivity/connect-gateway-to-private-resources/vpcegress/agentcore/cdk/lib/
 lib64/
 parts/
 sdist/
