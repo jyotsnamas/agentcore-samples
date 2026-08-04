@@ -77,11 +77,17 @@ class GatewayBoto3Client:
         bedrock_targets: bool = False,
         policy_engine_arn: str | None = None,
     ) -> str:
-        """Create a least-privilege IAM role for the gateway.
+        """Create the gateway execution role for a tutorial gateway.
 
         Mirrors the CDK L3 construct behavior: starts with the assume-role
-        trust policy, then adds only the permissions needed based on the
-        target types configured.
+        trust policy, then adds only the *actions* needed for the target types
+        configured.
+
+        NOT least-privilege as written. Several statements use Resource="*"
+        because the tutorials create their tool Lambdas, credential providers
+        and schema buckets after the role, so their ARNs are not known here.
+        Each such statement carries an inline note showing the ARN pattern to
+        scope it to; do that before reusing this in a real workload.
         """
         role_name = f"agentcore-{gateway_name}-role"
         gateway_arn = (
@@ -242,7 +248,10 @@ class GatewayBoto3Client:
         self,
         name: str,
         *,
-        authorizer_type: str = "NONE",
+        # Defaults to CUSTOM_JWT: an unauthenticated gateway is a poor default
+        # for copy-paste code. Pass authorizer_type="NONE" explicitly if you
+        # really want an open gateway (throwaway accounts only).
+        authorizer_type: str = "CUSTOM_JWT",
         discovery_url: str | None = None,
         allowed_clients: list[str] | None = None,
         protocol_config: dict[str, Any] | None = None,
@@ -281,7 +290,13 @@ class GatewayBoto3Client:
         kwargs["exceptionLevel"] = "DEBUG"
 
         kwargs["authorizerType"] = authorizer_type
-        if authorizer_type == "CUSTOM_JWT" and discovery_url:
+        if authorizer_type == "CUSTOM_JWT":
+            if not discovery_url:
+                raise ValueError(
+                    "authorizer_type='CUSTOM_JWT' requires discovery_url. "
+                    "Pass the OIDC discovery URL of your identity provider, or "
+                    "set authorizer_type='AWS_IAM' / 'NONE' deliberately."
+                )
             kwargs["authorizerConfiguration"] = {
                 "customJWTAuthorizer": {
                     "allowedClients": allowed_clients or [],

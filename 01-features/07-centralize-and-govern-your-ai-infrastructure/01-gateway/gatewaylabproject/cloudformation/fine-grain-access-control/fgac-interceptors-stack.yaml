@@ -65,6 +65,11 @@ Resources:
           SYSTEM_TOOLS = {"x_amz_bedrock_agentcore_search"}
 
           def decode_jwt_payload(token):
+              # Decodes the JWT payload WITHOUT verifying the signature. That is
+              # only safe here because the gateway's CUSTOM_JWT authorizer has
+              # already validated signature, issuer, audience and expiry before
+              # invoking this interceptor. Never reuse this function anywhere the
+              # token has not already been verified — a caller could forge scopes.
               parts = token.split(".")
               if len(parts) != 3:
                   raise ValueError("Invalid JWT format")
@@ -172,6 +177,11 @@ Resources:
           GATEWAY_TARGET_NAME = os.environ.get("GATEWAY_TARGET_NAME", "")
 
           def decode_jwt_payload(token):
+              # Decodes the JWT payload WITHOUT verifying the signature. That is
+              # only safe here because the gateway's CUSTOM_JWT authorizer has
+              # already validated signature, issuer, audience and expiry before
+              # invoking this interceptor. Never reuse this function anywhere the
+              # token has not already been verified — a caller could forge scopes.
               parts = token.split(".")
               if len(parts) != 3:
                   raise ValueError("Invalid JWT format")
@@ -231,7 +241,22 @@ Resources:
                       body = filtered_body
 
               except Exception as e:
-                  print(f"[FGAC] Response filter error: {e}")
+                  # Fail CLOSED. Returning `body` unchanged here would hand the
+                  # caller the complete, unfiltered tool catalog whenever the
+                  # token cannot be parsed — the exact disclosure this
+                  # interceptor exists to prevent.
+                  print(f"[FGAC] Response filter error, returning empty tool list: {e}")
+                  body = body.copy()
+                  result = body.get("result", {})
+                  if isinstance(result, dict):
+                      result = result.copy()
+                      if "structuredContent" in result:
+                          sc = dict(result["structuredContent"])
+                          sc["tools"] = []
+                          result["structuredContent"] = sc
+                      if "tools" in result:
+                          result["tools"] = []
+                      body["result"] = result
 
               response_headers = gateway_response.get("headers", {})
               return {
