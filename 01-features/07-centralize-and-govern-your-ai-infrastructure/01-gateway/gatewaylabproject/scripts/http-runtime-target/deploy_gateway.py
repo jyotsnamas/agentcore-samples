@@ -13,7 +13,6 @@ Usage:
 import argparse
 import os
 import sys
-import time
 
 import boto3
 
@@ -127,12 +126,7 @@ def main():
         print(f"  Gateway URL: {gateway_url}")
 
         print("\n  Waiting for gateway to become READY...")
-        while True:
-            time.sleep(10)
-            status = control.get_gateway(gatewayIdentifier=gateway_id)["status"]
-            print(f"    Status: {status}")
-            if status in ["READY", "FAILED", "CREATE_FAILED"]:
-                break
+        admin.wait_for_gateway(gateway_id)
 
     save_env({"GATEWAY_ID": gateway_id, "GATEWAY_URL": gateway_url})
     print("\n  Saved GATEWAY_ID and GATEWAY_URL to .env")

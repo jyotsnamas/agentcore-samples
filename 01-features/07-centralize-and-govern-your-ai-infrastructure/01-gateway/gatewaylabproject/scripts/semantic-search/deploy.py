@@ -356,13 +356,7 @@ def main():
         print(f"  Gateway URL: {gateway_url}")
 
         print("  Waiting for gateway to become READY...")
-        while True:
-            time.sleep(10)
-            gw = admin.client.get_gateway(gatewayIdentifier=gateway_id)
-            status = gw["status"]
-            print(f"    Status: {status}")
-            if status in ["READY", "FAILED", "CREATE_FAILED"]:
-                break
+        admin.wait_for_gateway(gateway_id)
     except admin.client.exceptions.ConflictException:
         print(f"  Gateway already exists: {GATEWAY_NAME}")
         gateways = admin.client.list_gateways(maxResults=50)

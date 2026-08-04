@@ -19,7 +19,6 @@ Usage:
 import argparse
 import os
 import sys
-import time
 
 import boto3
 
@@ -123,13 +122,7 @@ def main():
     print(f"  Target ID: {target_id}")
 
     print("\n  Waiting for target to become READY...")
-    while True:
-        time.sleep(10)
-        t = control.get_gateway_target(gatewayIdentifier=gateway_id, targetId=target_id)
-        status = t["status"]
-        print(f"    Status: {status}")
-        if status in ["READY", "FAILED", "CREATE_FAILED"]:
-            break
+    admin.wait_for_target(gateway_id, target_id)
 
     save_env({"TARGET_ID": target_id, "TARGET_NAME": TARGET_NAME})
     print("\n  Saved TARGET_ID and TARGET_NAME to .env")

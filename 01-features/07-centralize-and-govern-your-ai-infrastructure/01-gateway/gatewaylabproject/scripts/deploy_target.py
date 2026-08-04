@@ -18,7 +18,6 @@ Usage:
 import argparse
 import os
 import sys
-import time
 
 import boto3
 
@@ -64,7 +63,6 @@ def main():
 
     region = boto3.Session().region_name
     admin = GatewayBoto3Client(region=region)
-    control = admin.client
     cfn = boto3.client("cloudformation", region_name=region)
     cognito = boto3.client("cognito-idp", region_name=region)
 
@@ -108,15 +106,7 @@ def main():
     print(f"  Target ID: {target_id}")
 
     print("\n  Waiting for target to become READY...")
-    while True:
-        time.sleep(10)
-        tgt = control.get_gateway_target(
-            gatewayIdentifier=gateway_id, targetId=target_id
-        )
-        status = tgt["status"]
-        print(f"    Status: {status}")
-        if status in ["READY", "FAILED", "CREATE_FAILED"]:
-            break
+    admin.wait_for_target(gateway_id, target_id)
 
     env_vars: dict[str, str] = {}
     if os.path.exists(args.gateway_env_file):

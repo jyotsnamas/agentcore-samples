@@ -13,7 +13,6 @@ Usage:
 
 import os
 import sys
-import time
 
 import boto3
 
@@ -176,13 +175,7 @@ def main():
     print(f"  Gateway ID: {gateway_id}")
 
     print("  Waiting for Gateway to become READY...")
-    while True:
-        time.sleep(10)
-        gw = control.get_gateway(gatewayIdentifier=gateway_id)
-        status = gw["status"]
-        print(f"    Status: {status}")
-        if status in ["READY", "FAILED", "CREATE_FAILED"]:
-            break
+    gw = admin.wait_for_gateway(gateway_id)
 
     gateway_url = gw["gatewayUrl"]
     print(f"  Gateway URL: {gateway_url}")
@@ -211,15 +204,7 @@ def main():
     print(f"  Target ID: {target_id}")
 
     print("  Waiting for Target to become READY...")
-    while True:
-        time.sleep(10)
-        tgt = control.get_gateway_target(
-            gatewayIdentifier=gateway_id, targetId=target_id
-        )
-        status = tgt["status"]
-        print(f"    Status: {status}")
-        if status in ["READY", "FAILED", "UPDATE_UNSUCCESSFUL"]:
-            break
+    admin.wait_for_target(gateway_id, target_id)
 
     # --- Save state ---
     save_env(

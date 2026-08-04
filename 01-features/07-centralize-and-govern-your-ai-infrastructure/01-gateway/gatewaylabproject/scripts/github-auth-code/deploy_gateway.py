@@ -11,7 +11,6 @@ Usage:
 
 import os
 import sys
-import time
 
 import boto3
 
@@ -84,13 +83,7 @@ def main():
     print(f"  Gateway URL: {gateway_url}")
 
     print("\n  Waiting for gateway to become READY...")
-    while True:
-        time.sleep(10)
-        gw = control.get_gateway(gatewayIdentifier=gateway_id)
-        status = gw["status"]
-        print(f"    Status: {status}")
-        if status in ["READY", "FAILED", "CREATE_FAILED"]:
-            break
+    admin.wait_for_gateway(gateway_id)
 
     env_path = os.path.join(os.path.dirname(__file__), ".env")
     env_vars: dict[str, str] = {}

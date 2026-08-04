@@ -33,6 +33,27 @@ import time
 from typing import Any
 
 import boto3
+from botocore.config import Config
+
+# Terminal states for gateway / target / runtime create-and-update polling.
+_READY = "READY"
+_FAILED_STATES = frozenset(
+    {"FAILED", "CREATE_FAILED", "UPDATE_FAILED", "UPDATE_UNSUCCESSFUL", "DELETE_FAILED"}
+)
+
+# Default ceiling for every wait_for_* helper. Control-plane resources here
+# normally settle in well under a minute; 10 minutes is generous while still
+# guaranteeing the script exits instead of polling forever in CI.
+DEFAULT_WAIT_TIMEOUT_SECONDS = 600
+DEFAULT_POLL_INTERVAL_SECONDS = 10
+
+
+class GatewayTimeoutError(RuntimeError):
+    """Raised when a resource does not reach a terminal state in time."""
+
+
+class GatewayFailedError(RuntimeError):
+    """Raised when a resource reaches a terminal FAILED state."""
 
 
 class GatewayBoto3Client:
@@ -43,20 +64,29 @@ class GatewayBoto3Client:
         # Optional control-plane endpoint override. Unset resolves to the
         # default AWS endpoint, so end users need no configuration.
         endpoint = os.environ.get("AGENTCORE_CONTROL_ENDPOINT")
+        # Adaptive retries with a raised attempt count: control-plane calls here
+        # are throttled per-account, and the default of 3 attempts makes long
+        # poll loops fail on transient ThrottlingException instead of retrying.
+        self._boto_config = Config(retries={"max_attempts": 10, "mode": "adaptive"})
         self.client = boto3.client(
             "bedrock-agentcore-control",
             region_name=self.region,
             endpoint_url=endpoint,
+            config=self._boto_config,
         )
         # Credential-provider (token-vault / Identity) operations use the
         # default endpoint, even when self.client is pointed at an override.
         self.identity_client = (
-            boto3.client("bedrock-agentcore-control", region_name=self.region)
+            boto3.client(
+                "bedrock-agentcore-control",
+                region_name=self.region,
+                config=self._boto_config,
+            )
             if endpoint
             else self.client
         )
-        self.iam = boto3.client("iam")
-        self.sts = boto3.client("sts")
+        self.iam = boto3.client("iam", config=self._boto_config)
+        self.sts = boto3.client("sts", config=self._boto_config)
         self._account_id: str | None = None
 
     @property
@@ -64,6 +94,86 @@ class GatewayBoto3Client:
         if self._account_id is None:
             self._account_id = self.sts.get_caller_identity()["Account"]
         return self._account_id
+
+    def _wait_for_status(
+        self,
+        describe,
+        label: str,
+        *,
+        timeout: int = DEFAULT_WAIT_TIMEOUT_SECONDS,
+        interval: int = DEFAULT_POLL_INTERVAL_SECONDS,
+        failed_states: frozenset[str] = _FAILED_STATES,
+    ) -> dict[str, Any]:
+        """Poll `describe()` until its "status" is terminal. Bounded and loud.
+
+        Replaces the `while True: time.sleep(10); ...` pattern, which had two
+        problems: it never gave up (a stuck resource hung the script, and CI,
+        forever), and it treated FAILED as success by simply breaking out of the
+        loop, so the script carried on with a broken resource and failed later
+        with a confusing error.
+
+        Returns the final describe response on READY.
+        Raises GatewayFailedError on a FAILED state, GatewayTimeoutError on timeout.
+        """
+        deadline = time.monotonic() + timeout
+        last_status = "<unknown>"
+        while time.monotonic() < deadline:
+            time.sleep(interval)
+            resp = describe()
+            last_status = resp.get("status", "<unknown>")
+            print(f"    Status: {last_status}")
+            if last_status == _READY:
+                return resp
+            if last_status in failed_states:
+                reason = (
+                    resp.get("statusReasons")
+                    or resp.get("statusReason")
+                    or "no reason reported by the service"
+                )
+                raise GatewayFailedError(
+                    f"{label} entered terminal state {last_status}: {reason}"
+                )
+        raise GatewayTimeoutError(
+            f"{label} did not reach READY within {timeout}s "
+            f"(last status: {last_status}). Check the AgentCore console, then "
+            f"re-run this script or raise the timeout."
+        )
+
+    def wait_for_gateway(
+        self, gateway_id: str, *, timeout: int = DEFAULT_WAIT_TIMEOUT_SECONDS
+    ) -> dict[str, Any]:
+        """Wait for a gateway to reach READY. See _wait_for_status."""
+        return self._wait_for_status(
+            lambda: self.client.get_gateway(gatewayIdentifier=gateway_id),
+            f"gateway {gateway_id}",
+            timeout=timeout,
+        )
+
+    def wait_for_target(
+        self,
+        gateway_id: str,
+        target_id: str,
+        *,
+        timeout: int = DEFAULT_WAIT_TIMEOUT_SECONDS,
+    ) -> dict[str, Any]:
+        """Wait for a gateway target to reach READY. See _wait_for_status."""
+        return self._wait_for_status(
+            lambda: self.client.get_gateway_target(
+                gatewayIdentifier=gateway_id, targetId=target_id
+            ),
+            f"target {target_id}",
+            timeout=timeout,
+        )
+
+    def wait_for_runtime(
+        self, runtime_id: str, *, timeout: int = DEFAULT_WAIT_TIMEOUT_SECONDS
+    ) -> dict[str, Any]:
+        """Wait for an agent runtime to reach READY. See _wait_for_status."""
+        return self._wait_for_status(
+            lambda: self.client.get_agent_runtime(agentRuntimeId=runtime_id),
+            f"runtime {runtime_id}",
+            timeout=timeout,
+        )
 
     def create_gateway_role(
         self,

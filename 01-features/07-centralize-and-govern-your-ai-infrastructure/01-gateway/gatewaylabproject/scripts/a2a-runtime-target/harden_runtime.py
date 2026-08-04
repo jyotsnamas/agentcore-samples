@@ -22,7 +22,6 @@ pass --gateway-arn directly.
 import argparse
 import os
 import sys
-import time
 
 import boto3
 
@@ -163,12 +162,7 @@ def main():
     control.update_agent_runtime(**kwargs)
     print("  update_agent_runtime submitted; waiting for READY...")
 
-    while True:
-        time.sleep(10)
-        status = control.get_agent_runtime(agentRuntimeId=runtime_id)["status"]
-        print(f"    Status: {status}")
-        if status in ["READY", "UPDATE_FAILED", "CREATE_FAILED"]:
-            break
+    admin.wait_for_runtime(runtime_id)
 
     print("\n  Applied authorizer configuration:")
     print(
